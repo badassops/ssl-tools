@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+#
+# Copyright 1996 - 2012 Luc Suryo <luc@suryo.com>.
+# Copyright 2012 - 2015 (c) BadAssOps / Luc Suryo
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#	* Redistributions of source code must retain the above copyright
+#	notice, this list of conditions and the following disclaimer.
+#	* Redistributions in binary form must reproduce the above copyright
+#	notice, this list of conditions and the following disclaimer in the
+#	documentation and/or other materials provided with the distribution.
+#	* Neither the name of the <organization> nor the
+#	names of its contributors may be used to endorse or promote products
+#	derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSEcw
+# ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#*
+#* File		:	makecsr
+#*
+#* Description	:	script to make a X500-SSL certificate request file
+#*
+#* Author	:	Luc Suryo <luc@badassops.com>
+#*
+#* Version	:	0.4
+#*
+#* Date		:	Nov 23, 2015
+#*
+#* History	:
+#* 		Date:				Author:			Info:
+#*		March 1, 1996		LIS				First Release
+#*		July 20, 2010		LIS				New license
+#*		Aug 10, 2012		LIS				Set Copyright to BadAssOps
+#*		Nov 23, 2015		LIS				Adjusted license and made script with the standard setup
+#*
+# get details:
+# openssl rsa -noout -text -in server.key
+# openssl req -noout -text -in server.csr
+#
+# Get unsecure PEM key
+# openssl rsa -in server.key -out server.key.unsecure
+
+_program="${0##*/}"
+_author='Luc Suryo'
+_copyright="Copyright 2012 - $(date "+%Y") (c) BadAssOps"
+_license='License BSD, http://www.freebsd.org/copyright/freebsd-license.html'
+_version='0.4'
+_email='luc@badassops.com'
+_summary='script to make a X500-SSL certificate request file'
+_cancelled="OK : Process has been cancelled on your request."
+_info="$_program $_version\n$_copyright\n$_license\n\nWritten by $_author <$_email>\n$_summary\n"
+_text_before_start="This script will create your certificate request and certificate key files, this is for in live production!"
+
+# Whatever script needs to be run as root and exclusive lock
+_need_root=0
+_need_lock=1
+
+# working variables
+_opid=$$
+_hostname="${HOSTNAME%%.*}"
+_work_dir=/var/tmp/"$_program"
+_lockfile="$_work_dir/$_program".LOCK
+_work_cert="$_work_dir/mkcert.cfg"
+_echo_flag='-e'
+_openssl=openssl
+
+# Cert Variables
+if [[ -f env ]] ; then
+	source ./env
+else
+	echo "env fiel is missing"
+	exit 1
+fi
+# need to cature now so we can use it for clean_up_upon_fail
+_my_cert_name="$1"
+_certs_files="csr key key.crypt pass"
+
+# Set interrupt handler
+trap inthandler 1 2 3 4 5 9 10 12 15 23 24 25
+
+function inthandler() {
+	clean_up_upon_fail
+	clean_up
+	echo $_echo_flag "$_cancelled"
+	exit 0
+}
+
+function clean_up_upon_fail() {
+	echo $_echo_flag "\t!!! Something when wrong or Control-C was press, deleting all certs file for $_my_cert_name !!!"
+	for _cert_file in $_cert_files
+	do
+		# interrupted before files were move under the certs directory
+		[[ -f "$_cert_file" ]] && rm -f "$_cert_file" > /dev/null 2>&1
+		# interrupted after files were move under the certs directory
+		[[ -f real_certs/"$_cert_file" ]] && rm -f real_certs/"$_cert_file" > /dev/null 2>&1
+	done
+	return 0
+}
+
+function clean_up_cert() {
+	_certs_files="${1}.csr ${1}.key ${1}.key.crypt ${1}.pass"
+	for _cert_file in $_cert_files
+	do
+		[[ -f  real_certs/"$_cert_file" ]] && rm -f  real_certs/"$_cert_file" > /dev/null 2>&1
+	done
+	return 0
+}
+
+function clean_up() {
+	rm -f "$_lockfile" > /dev/null 2>&1
+	return 0
+}
+
+function help() {
+	trap 1 2 3 4 5 9 10 12 15 23 24 25
+	echo $_echo_flag "$_info"
+	echo $_echo_flag "Usage : $_program [-h] name-for-cert"
+	echo $_echo_flag "Example: $_program www.suryo.com"
+	clean_up
+	exit 0
+}
+
+function isRoot() {
+	if (($(id -u) != 0)) ; then
+		echo $_echo_flag "\n\t*** $_program: this script must be run as the user root ***\n" >&2
+		return 1
+	fi
+	return 0
+}
+
+function check_running() {
+	if [[ -f "$_lockfile" ]]; then
+		echo $_echo_flag "*** There is already a $_program running, execution has been terminated. ***"
+		echo $_echo_flag "*** If this is an error please remove the lock file: $_lockfile. ***"
+		exit 2
+	fi
+	if ! mkdir -p "$_work_dir" > /dev/null 2>&1;then
+		echo $_echo_flag "*** $_state_unknown_msg: Unable to create file working directory $_work_dir! ***"
+		exit 2
+	fi
+	echo "$_opid" > "$_lockfile"
+	return 0
+}
+
+function setup_env() {
+	# make sure environment exists
+	[[ ! -d real_certs ]] && mkdir -p real_certs
+	return 0
+}
+
+function create_key() {
+	echo $_echo_flag "\t*** Generating RSA private key for SERVER ($_my_sec_size bit) [${_my_cert_name}.key] ***"
+	$_openssl genrsa -out "$_my_cert_name".key $_my_sec_size > /dev/null 2>&1
+	(( $? != 0 )) && return 1
+	return 0
+}
+
+function create_csr() {
+	echo $_echo_flag "\t*** Generating X.509 certificate request for SERVER [${_my_cert_name}.csr] ***"
+	echo $_echo_flag "\t**************************************************************"
+	echo $_echo_flag "\t********** DO NOT USE SAME PASSWORD AS THE KEY FILE **********"
+	echo $_echo_flag "\t**************************************************************"
+cat > $_work_cert <<EOT
+[ req ]
+default_bits					= $_my_sec_size
+distinguished_name				= req_distinguished_name
+attributes						= req_attributes
+string_mask						= utf8only
+req_extensions					= v3_req
+
+[ req_distinguished_name ]
+countryName						= "1. Country Name             (2 letter code)"
+countryName_default				= $_my_country
+countryName_min					= 2
+countryName_max					= 2
+stateOrProvinceName				= "2. State or Province Name   (full name)    "
+stateOrProvinceName_default		= $_my_state
+localityName					= "3. Locality Name            (eg, city)     "
+localityName_default			= $_my_city
+0.organizationName				= "4. Organization Name        (eg, company)  "
+0.organizationName_default		= $_my_org
+organizationalUnitName			= "5. Organizational Unit Name (eg, section)  "
+organizationalUnitName_default	=
+commonName						= "6. Common Name              (eg, fqdn)     "
+commonName_max					= 64
+commonName_default				= $_my_cert_name
+emailAddress					= "7. Email Address            (eg, name@fqdn)"
+emailAddress_max				= 40
+emailAddress_default			= $_my_email
+
+[ req_attributes ]
+challengePassword				= "The password for the request file"
+challengePassword_default		= $_my_req_pass
+challengePassword_min			= 4
+challengePassword_max			= 20
+unstructuredName				= "Organization Name"
+unstructuredName_default		= $_my_org
+
+[ v3_req ]
+basicConstraints				= CA:FALSE
+keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
+EOT
+
+	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr
+	(( $? != 0 )) && return 1
+	rm -f $_work_cert
+	return 0
+}
+
+function check_cert() {
+	echo $_echo_flag "\t*** Enrypting RSA private key of SERVER with a pass phrase for security [${_my_cert_name}.key] ***"
+	$_openssl rsa -des3 -in "$_my_cert_name".key -out "$_my_cert_name".key.crypt > /dev/null 2>&1
+	if (( $? != 0 )) ; then
+		echo $_echo_flag "\t!!!! $_program Error: Failed to Enrypting RSA private key of CA with a pass phrase !!!!"
+		return 1
+	fi
+	return 0
+}
+
+function make_it() {
+	create_key
+	(( $? != 0 )) && return 1
+	create_csr
+	(( $? != 0 )) && return 1
+	check_cert
+	(( $? != 0 )) && return 1
+
+	# create the password file for the cert, so we have it in case we forgot the password.
+	mv ${_my_cert_name}*  real_certs/
+	echo $_echo_flag "\t*** About to Create the password file for the CA cert, so we have it in case we forgot the password ***"
+	echo -n "Enter the same password one more time.."
+	stty -echo
+	read in_key
+	stty echo
+	echo "$in_key" >  real_certs/"$_my_cert_name".pass
+	echo "Server ${_my_cert_name}'s CERT created and ready for use....."
+	return 0
+}
+
+function main() {
+	# secret flag :)
+	case $1
+	in
+		cleanup)	clean_up_cert $2 ; exit 0 ;;
+		-h|--help)	help ; exit 0 ;;
+	esac
+
+	[[ $# != 1 ]] && help
+	setup_env
+
+	if (( $_need_root == 1 )) ; then
+		 isRoot
+		(( $? != 0 )) && echo $_echo_flag "$_info" && exit 255
+	fi
+	(( $_need_lock == 1 )) && check_running
+
+	echo $_echo_flag "$_text_before_start"
+	echo $_echo_flag "Press Enter to continue or Control-C to cancel..."
+	read inKey
+	make_it
+	_result=$?
+
+	(( $_result == 1 )) && clean_up_upon_fail
+	clean_up
+	trap 1 2 3 4 5 9 10 12 15 23 24 25
+	exit $_result
+}
+main "$@"
