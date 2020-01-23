@@ -1,1 +1,4 @@
 check_cert_file
+env.bao
+certs/*
+real_certs/*

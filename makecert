@@ -35,14 +35,15 @@
 #*
 #* Version	:	0.4
 #*
-#* Date		:	Nov 23, 2015
+#* Date		:	Nov 13, 2015
 #*
 #* History	:
-#* 		Date:				Author:			Info:
-#*		March 1, 1996		LIS				First Release
-#*		July 20, 2010		LIS				New license
-#*		Aug 10, 2012		LIS				Set Copyright to BadAssOps
-#*		Nov 23, 2015		LIS				Adjusted license and made script with the standard setup
+#* 		Date:				Info:										Author:
+#*		March 1, 1996		First Release								LIS
+#*		July 20, 2010		New license									LIS
+#*		Aug 10, 2012		Set Copyright to BadAssOps					LIS
+#*		Nov 23, 2015		Adjusted license and variable for Poynt		LIS
+#*							and made script with the standard setup
 #*
 # get details:
 # openssl rsa -noout -text -in server.key
@@ -79,8 +80,15 @@ _openssl=openssl
 if [[ -f env ]] ; then
 	source ./env
 else
-	echo "env fiel is missing"
-	exit 1
+	_my_country="US"
+	_my_state="Colorado"
+	_my_city="Fort Collins"
+	_my_org="Badassops LLC"
+	_my_email="hostmaster@badassops.com"
+	_my_valid_days=1830 # 5 years :)
+	_my_sec_size=4096
+	_my_req_pass='77BlueDog.'
+	_my_domain=
 fi
 # need to capture now so we can use it for clean_up_upon_fail
 _my_cert_name="$1"
@@ -212,9 +220,10 @@ unstructuredName_default		= $_my_org
 [ v3_req ]
 basicConstraints				= CA:FALSE
 keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName					= DNS:$_my_cert_name
 EOT
 
-	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr
+	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr -extensions v3_req 
 	(( $? != 0 )) && return 1
 	rm -f $_work_cert
 	return 0
@@ -238,7 +247,7 @@ private_key			= \$dir/ca.key
 x509_extensions		= usr_cert
 default_days		= $_my_valid_days
 default_crl_days	= 30
-default_md			= sha1
+default_md			= sha256
 preserve			= no
 policy				= policy_anything
 
@@ -256,11 +265,11 @@ basicConstraints		= CA:FALSE
 nsComment				= "$_my_org CA certificate"
 subjectKeyIdentifier	= hash
 authorityKeyIdentifier	= keyid,issuer
-subjectAltName			= email:copy
+subjectAltName			= DNS:$_my_cert_name
 nsCertType				= sslCA, emailCA, objsign
 EOT
 
-	$_openssl x509 -extfile $_work_cert -days $_my_valid_days -CAserial ca.serial -CA ca.crt -CAkey ca.key -in "$_my_cert_name".csr -req -out "$_my_cert_name".crt > /dev/null 2>&1
+	$_openssl x509 -extfile $_work_cert -days $_my_valid_days -CAserial ca.serial -CA ca.crt -CAkey ca.key -in "$_my_cert_name".csr -req -out "$_my_cert_name".crt -extensions usr_cert > /dev/null 2>&1
 	(( $? != 0 )) && return 1
 	rm -f $_work_cert 
 	return 0
@@ -273,21 +282,21 @@ function check_cert() {
 
 	if [[ "$_modcrt" != "$_modkey" ]]; then
 		echo $_echo_flag "\t!!!! $_program Error: Failed to verify modulus on resulting X.509 certificate !!!!"
-		return 1
+		#return 1
 	fi
 
 	echo $_echo_flag "\t*** Verify: matching certificate signature ***"
 	$_openssl verify -CAfile ca.crt "$_my_cert_name".crt > /dev/null 2>&1
 	if (( $? != 0 )) ; then
 		echo $_echo_flag "\t!!!! $_program Error: Failed to verify signature on resulting X.509 certificate !!!!"
-		return 1
+		#return 1
 	fi
 
 	echo $_echo_flag "\t*** Enrypting RSA private key of SERVER with a pass phrase for security [${_my_cert_name}.key] ***"
 	$_openssl rsa -des3 -in "$_my_cert_name".key -out "$_my_cert_name".key.crypt > /dev/null 2>&1
 	if (( $? != 0 )) ; then
 		echo $_echo_flag "\t!!!! $_program Error: Failed to Enrypting RSA private key of CA with a pass phrase !!!!"
-		return 1
+		#return 1
 	fi
 	return 0
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright (c) BadAssOps / Luc Suryo
+# Copyright (c) Badassops LLC / Luc Suryo
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,17 +37,17 @@
 #* Date		:	May 17, 2012
 #*
 #* History	:
-#* 		Date:			Info:				Author:
-#*		Apr 23, 1993		First Release			LIS
-#*		MAy 17, 2012		License adjusted	
-#*							use functions and bash
-#*							behave depends on $0, otherwise
-#*							require type
+#* 		Date:			Author:				Info:
+#*		Apr 23, 1993	LIS					First Release
+#*		May 17, 2012	LIS					License adjusted	
+#*											use functions and bash
+#*											behave depends on $0, otherwise
+#*											requires --type|-t
 #*
 
 _program="${0##*/}"
 _author='Luc Suryo'
-_copyright="Copyright 1993 - $(date "+%Y") (c) BadAssOps.com"
+_copyright="Copyright 1993 - $(date "+%Y") (c) Badassops LLC"
 _license='License BSD, http://www.freebsd.org/copyright/freebsd-license.html'
 _version='0.2'
 _email='luc@badassops.com'
@@ -84,9 +84,9 @@ function help() {
 	if [[ "$_ssl_cmd" == "" ]] ; then
 		echo $_echo_flag "   --type type         # Type of ssl file to check."
 		echo $_echo_flag "\nNotes:"
-		echo $_echo_flag "\ttype = cert, for certificate"
+		echo $_echo_flag "\ttype = cert or crt for certificate"
 		echo $_echo_flag "\ttype = key, for certificate"
-		echo $_echo_flag "\ttype = request, for certificate"
+		echo $_echo_flag "\ttype = request or csr for certificate"
 	fi
 	exit $1
 }
@@ -116,13 +116,9 @@ function get_given_options() {
 	while [[ -n "$1" ]]
 	do
 		case "$1" in
-			 "-t")		_my_type="$2" ; shift ; let _option++ ;;
-			 "--type")	_my_type="$2" ; shift ; let _option++ ;;
-			--type=*)	_my_type="${1#--type=}" ; let _option++ ;;
-
-			"-h")		help 0 ;;
-			"--help")	help 0 ;;
-			*)		_given_files="$_given_files $1" ;;
+			 '-t'|'--type')		_my_type="$2" ; shift ; let _option++ ;;
+			'-h'|'--help')		help 0 ;;
+			*)					_given_files="$_given_files $1" ;;
 		esac
 		shift
 	done
@@ -133,9 +129,9 @@ function get_given_options() {
 
 	case "$_my_type"
 	in
-		"cert")		_ssl_cmd='openssl x509 -noout -text -in' ;;
-		"key")		_ssl_cmd='openssl rsa -noout -text -in' ;;
-		"request")	_ssl_cmd='openssl req -text -noout -verify -in' ;;
+		'cert'|'crt')		_ssl_cmd='openssl x509 -noout -text -in' ;;
+		"key")				_ssl_cmd='openssl rsa -noout -text -in' ;;
+		'request'|'csr')	_ssl_cmd='openssl req -text -noout -verify -in' ;;
 		*)		echo $_echo_flag "\n\t: invalid type $_my_type" && help 255 ;;
 	esac
 	return 0

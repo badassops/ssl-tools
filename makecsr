@@ -35,14 +35,15 @@
 #*
 #* Version	:	0.4
 #*
-#* Date		:	Nov 23, 2015
+#* Date		:	Nov 13, 2015
 #*
 #* History	:
-#* 		Date:				Author:			Info:
-#*		March 1, 1996		LIS				First Release
-#*		July 20, 2010		LIS				New license
-#*		Aug 10, 2012		LIS				Set Copyright to BadAssOps
-#*		Nov 23, 2015		LIS				Adjusted license and made script with the standard setup
+#* 		Date:				Info:										Author:
+#*		March 1, 1996		First Release								LIS
+#*		July 20, 2010		New license									LIS
+#*		Aug 10, 2012		Set Copyright to BadAssOps					LIS
+#*		Nov 23, 2015		Adjusted license and variable for Poynt		LIS
+#*							and made script with the standard setup
 #*
 # get details:
 # openssl rsa -noout -text -in server.key
@@ -79,8 +80,15 @@ _openssl=openssl
 if [[ -f env ]] ; then
 	source ./env
 else
-	echo "env fiel is missing"
-	exit 1
+	_my_country="US"
+	_my_state="Colorado"
+	_my_city="Fort Collins"
+	_my_org="BadAssOps LLC"
+	_my_email="hostmaster@badassops.com"
+	_my_valid_days=1830 # 5 years :)
+	_my_sec_size=4096
+	_my_req_pass='77BlueDog.'
+	_my_domain=
 fi
 # need to cature now so we can use it for clean_up_upon_fail
 _my_cert_name="$1"
@@ -210,9 +218,10 @@ unstructuredName_default		= $_my_org
 [ v3_req ]
 basicConstraints				= CA:FALSE
 keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName					= DNS:$_my_cert_name
 EOT
 
-	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr
+	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr -extensions v3_req
 	(( $? != 0 )) && return 1
 	rm -f $_work_cert
 	return 0
