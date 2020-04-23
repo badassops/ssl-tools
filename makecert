@@ -223,7 +223,7 @@ keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
 subjectAltName					= DNS:$_my_cert_name
 EOT
 
-	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr -extensions v3_req 
+	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr -extensions v3_req
 	(( $? != 0 )) && return 1
 	rm -f $_work_cert
 	return 0
@@ -271,7 +271,7 @@ EOT
 
 	$_openssl x509 -extfile $_work_cert -days $_my_valid_days -CAserial ca.serial -CA ca.crt -CAkey ca.key -in "$_my_cert_name".csr -req -out "$_my_cert_name".crt -extensions usr_cert > /dev/null 2>&1
 	(( $? != 0 )) && return 1
-	rm -f $_work_cert 
+	rm -f $_work_cert
 	return 0
 }
 

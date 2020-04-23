@@ -39,7 +39,7 @@
 #* History	:
 #* 		Date:			Author:				Info:
 #*		Apr 23, 1993	LIS					First Release
-#*		May 17, 2012	LIS					License adjusted	
+#*		May 17, 2012	LIS					License adjusted
 #*											use functions and bash
 #*											behave depends on $0, otherwise
 #*											requires --type|-t
@@ -78,7 +78,7 @@ function help() {
 	if [[ "$_ssl_cmd" == "" ]] ; then
 		_extra_flag=" -t type "
 	fi
-	echo $_echo_flag "Usage : $_program [-h] ${_extra_flag}file ... file" 
+	echo $_echo_flag "Usage : $_program [-h] ${_extra_flag}file ... file"
 	echo $_echo_flag " Options:"
 	echo $_echo_flag "   -h                  # this help page."
 	if [[ "$_ssl_cmd" == "" ]] ; then
@@ -106,7 +106,6 @@ function view_given_certs() {
 		else
 			echo $_echo_flag "\n\t *** file $_cert is not a file ***"
 		fi
-		
 	done
 	return 0
 }
