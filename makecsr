@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 1996 - 2012 Luc Suryo <luc@suryo.com>.
-# Copyright 2012 - 2015 (c) BadAssOps / Luc Suryo
+# Copyright 2012 - 2015 (c) Badassops LLC / Luc Suryo
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -31,19 +31,20 @@
 #*
 #* Description	:	script to make a X500-SSL certificate request file
 #*
-#* Author	:	Luc Suryo <luc@badassops.com>
+#* Author	:	Luc Suryo <luc@Badassops LLC.com>
 #*
-#* Version	:	0.4
+#* Version	:	0.5
 #*
-#* Date		:	Nov 13, 2015
+#* Date		:	May 7, 2020
 #*
 #* History	:
-#* 		Date:				Info:										Author:
-#*		March 1, 1996		First Release								LIS
-#*		July 20, 2010		New license									LIS
-#*		Aug 10, 2012		Set Copyright to BadAssOps					LIS
-#*		Nov 23, 2015		Adjusted license and variable for Poynt		LIS
-#*							and made script with the standard setup
+#* 		Date:				Author		Info:
+#*		March 1, 1996		LIS			First Release
+#*		July 20, 2010		LIS			New license
+#*		Aug 10, 2012		LIS			Set Copyright to Badassops LLC
+#*		Nov 23, 2015		LIS			Adjusted license and variable for Poynt
+#*										and made script with the standard setup
+#*		May 7	2020		LIS			added color and better wildcard (*) support
 #*
 # get details:
 # openssl rsa -noout -text -in server.key
@@ -54,9 +55,9 @@
 
 _program="${0##*/}"
 _author='Luc Suryo'
-_copyright="Copyright 2012 - $(date "+%Y") (c) BadAssOps"
+_copyright="Copyright 2012 - $(date "+%Y") (c) Badassops LLC"
 _license='License BSD, http://www.freebsd.org/copyright/freebsd-license.html'
-_version='0.4'
+_version='0.5'
 _email='luc@badassops.com'
 _summary='script to make a X500-SSL certificate request file'
 _cancelled="OK : Process has been cancelled on your request."
@@ -67,6 +68,17 @@ _text_before_start="This script will create your certificate request and certifi
 _need_root=0
 _need_lock=1
 
+# color :)
+_reset_color='\033[0m'				# Text Reset
+_color_bold_black='\033[1;30m'		# Black
+_color_bold_red='\033[1;31m'		# Red
+_color_bold_green='\033[1;32m'		# Green
+_color_bold_yellow='\033[1;33m'		# Yellow
+_color_bold_blue='\033[1;34m'		# Blue
+_color_bold_purple='\033[1;35m'		# Purple
+_color_bold_cyan='\033[1;36m'		# Cyan
+_color_bold_white='\033[1;37m'		# White
+
 # working variables
 _opid=$$
 _hostname="${HOSTNAME%%.*}"
@@ -75,24 +87,43 @@ _lockfile="$_work_dir/$_program".LOCK
 _work_cert="$_work_dir/mkcert.cfg"
 _echo_flag='-e'
 _openssl=openssl
+_debug=0
 
 # Cert Variables
 if [[ -f env ]] ; then
 	source ./env
-else
-	_my_country="US"
-	_my_state="Colorado"
-	_my_city="Fort Collins"
-	_my_org="BadAssOps LLC"
-	_my_email="hostmaster@badassops.com"
-	_my_valid_days=1830 # 5 years :)
-	_my_sec_size=4096
-	_my_req_pass='77BlueDog.'
-	_my_domain=
 fi
-# need to cature now so we can use it for clean_up_upon_fail
-_my_cert_name="$1"
-_certs_files="csr key key.crypt pass"
+
+# need to capture now so we can use it for clean_up_upon_fail
+_given_cert_name="$1"
+if [[ "$_given_cert_name" == *"wildcard"* ]]; then
+	_my_base_cert_name="${_given_cert_name/wildcard\./}"
+	_my_cert_name="*.${_my_base_cert_name}"
+	_subject_alt_name="DNS:$_my_cert_name, DNS:$_my_base_cert_name"
+	_my_cert_crt=wildcard."$_my_base_cert_name".crt
+	_my_cert_key=wildcard."$_my_base_cert_name".key
+	_my_cert_csr=wildcard."$_my_base_cert_name".csr
+	_my_cert_pass=wildcard."$_my_base_cert_name".pass
+
+elif [[ "$_given_cert_name" == *'*.'* ]]; then
+	_my_base_cert_name="${_given_cert_name#\*\.}"
+	_my_cert_name="*.${_my_base_cert_name}"
+	_subject_alt_name="DNS:$_my_cert_name, DNS:$_my_base_cert_name"
+	_my_cert_crt=wildcard."$_my_base_cert_name".crt
+	_my_cert_key=wildcard."$_my_base_cert_name".key
+	_my_cert_csr=wildcard."$_my_base_cert_name".csr
+	_my_cert_pass=wildcard."$_my_base_cert_name".pass
+
+else
+	_my_base_cert_name="$_given_cert_name"
+	_my_cert_name="$_given_cert_name"
+	_subject_alt_name="DNS:$_my_cert_name"
+	_my_cert_crte="$_my_cert_name".crt
+	_my_cert_key="$_my_cert_name".key
+	_my_cert_csr="$_my_cert_name".csr
+	_my_cert_pass="$_my_cert_name".pass
+fi
+_certs_files="$_my_cert_crt $_my_cert_key $_my_cert_csr $_my_cert_pass ${_my_cert_key}.crypt"
 
 # Set interrupt handler
 trap inthandler 1 2 3 4 5 9 10 12 15 23 24 25
@@ -105,7 +136,7 @@ function inthandler() {
 }
 
 function clean_up_upon_fail() {
-	echo $_echo_flag "\t!!! Something when wrong or Control-C was press, deleting all certs file for $_my_cert_name !!!"
+	echo $_echo_flag "\n$_color_bold_red\t!!! Something when wrong or Control-C was press, deleting all certs file for $_my_cert_name !!!$_reset_color"
 	for _cert_file in $_cert_files
 	do
 		# interrupted before files were move under the certs directory
@@ -117,10 +148,9 @@ function clean_up_upon_fail() {
 }
 
 function clean_up_cert() {
-	_certs_files="${1}.csr ${1}.key ${1}.key.crypt ${1}.pass"
 	for _cert_file in $_cert_files
 	do
-		[[ -f  real_certs/"$_cert_file" ]] && rm -f  real_certs/"$_cert_file" > /dev/null 2>&1
+		[[ -f real_certs/"$_cert_file" ]] && rm -f real_certs/"$_cert_file" > /dev/null 2>&1
 	done
 	return 0
 }
@@ -141,7 +171,7 @@ function help() {
 
 function isRoot() {
 	if (($(id -u) != 0)) ; then
-		echo $_echo_flag "\n\t*** $_program: this script must be run as the user root ***\n" >&2
+		echo $_echo_flag "$_color_bold_red\n\t $_program: this script must be run as the user root $_reset_color\n" >&2
 		return 1
 	fi
 	return 0
@@ -149,12 +179,12 @@ function isRoot() {
 
 function check_running() {
 	if [[ -f "$_lockfile" ]]; then
-		echo $_echo_flag "*** There is already a $_program running, execution has been terminated. ***"
-		echo $_echo_flag "*** If this is an error please remove the lock file: $_lockfile. ***"
+		echo $_echo_flag "$_color_bold_red There is already a $_program running, execution has been terminated. $_reset_color"
+		echo $_echo_flag "$_color_bold_red If this is an error please remove the lock file: $_lockfile. $_reset_color"
 		exit 2
 	fi
 	if ! mkdir -p "$_work_dir" > /dev/null 2>&1;then
-		echo $_echo_flag "*** $_state_unknown_msg: Unable to create file working directory $_work_dir! ***"
+		echo $_echo_flag "$_color_bold_red $_state_unknown_msg: Unable to create file working directory $_work_dir! $_reset_color"
 		exit 2
 	fi
 	echo "$_opid" > "$_lockfile"
@@ -168,17 +198,17 @@ function setup_env() {
 }
 
 function create_key() {
-	echo $_echo_flag "\t*** Generating RSA private key for SERVER ($_my_sec_size bit) [${_my_cert_name}.key] ***"
-	$_openssl genrsa -out "$_my_cert_name".key $_my_sec_size > /dev/null 2>&1
-	(( $? != 0 )) && return 1
+	echo $_echo_flag "$_color_bold_cyan\t Generating RSA private key for SERVER ($_my_sec_size bit) [${_my_cert_key}] $_reset_color"
+	if (( $_debug == 0 )) ; then
+		$_openssl genrsa -out "$_my_cert_key" $_my_sec_size > /dev/null 2>&1
+		(( $? != 0 )) && return 1
+	echo $_echo_flag "$_color_bold_cyan\t created$_reset_color\n"
+	fi
 	return 0
 }
 
 function create_csr() {
-	echo $_echo_flag "\t*** Generating X.509 certificate request for SERVER [${_my_cert_name}.csr] ***"
-	echo $_echo_flag "\t**************************************************************"
-	echo $_echo_flag "\t********** DO NOT USE SAME PASSWORD AS THE KEY FILE **********"
-	echo $_echo_flag "\t**************************************************************"
+	echo $_echo_flag "\t$_color_bold_cyan Generating X.509 certificate request for SERVER [${_my_cert_csr}]$_reset_color"
 cat > $_work_cert <<EOT
 [ req ]
 default_bits					= $_my_sec_size
@@ -188,28 +218,26 @@ string_mask						= utf8only
 req_extensions					= v3_req
 
 [ req_distinguished_name ]
-countryName						= "1. Country Name             (2 letter code)"
+countryName						= "1. Country Name (2 letter code)"
 countryName_default				= $_my_country
 countryName_min					= 2
 countryName_max					= 2
-stateOrProvinceName				= "2. State or Province Name   (full name)    "
+stateOrProvinceName				= "2. State or Province Name (full name)"
 stateOrProvinceName_default		= $_my_state
-localityName					= "3. Locality Name            (eg, city)     "
+localityName					= "3. Locality Name (eg, city)"
 localityName_default			= $_my_city
-0.organizationName				= "4. Organization Name        (eg, company)  "
+0.organizationName				= "4. Organization Name (eg, company)"
 0.organizationName_default		= $_my_org
-organizationalUnitName			= "5. Organizational Unit Name (eg, section)  "
+organizationalUnitName			= "5. Organizational Unit Name (eg, section)"
 organizationalUnitName_default	=
-commonName						= "6. Common Name              (eg, fqdn)     "
+commonName						= "6. Common Name (eg, fqdn)"
 commonName_max					= 64
 commonName_default				= $_my_cert_name
-emailAddress					= "7. Email Address            (eg, name@fqdn)"
+emailAddress					= "7. Email Address (eg, name@fqdn)"
 emailAddress_max				= 40
 emailAddress_default			= $_my_email
 
 [ req_attributes ]
-challengePassword				= "The password for the request file"
-challengePassword_default		= $_my_req_pass
 challengePassword_min			= 4
 challengePassword_max			= 20
 unstructuredName				= "Organization Name"
@@ -218,21 +246,32 @@ unstructuredName_default		= $_my_org
 [ v3_req ]
 basicConstraints				= CA:FALSE
 keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
-subjectAltName					= DNS:$_my_cert_name
+subjectAltName					= $_subject_alt_name
 EOT
 
-	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_name".key -out "$_my_cert_name".csr -extensions v3_req
-	(( $? != 0 )) && return 1
+# removed req_attributes
+# challengePassword				= "The password for the request file"
+# challengePassword_default		= $_my_req_pass
+
+	if (( $_debug == 0 )) ; then
+		echo $_echo_flag "$_color_bold_cyan\t Password set is $_color_bold_purple$_my_req_pass $_reset_color\n"
+		$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_key" -out "$_my_cert_csr" -extensions v3_req
+		(( $? != 0 )) && return 1
+	else
+		cat $_work_cert
+	fi
 	rm -f $_work_cert
 	return 0
 }
 
 function check_cert() {
-	echo $_echo_flag "\t*** Enrypting RSA private key of SERVER with a pass phrase for security [${_my_cert_name}.key] ***"
-	$_openssl rsa -des3 -in "$_my_cert_name".key -out "$_my_cert_name".key.crypt > /dev/null 2>&1
-	if (( $? != 0 )) ; then
-		echo $_echo_flag "\t!!!! $_program Error: Failed to Enrypting RSA private key of CA with a pass phrase !!!!"
-		return 1
+	echo $_echo_flag "$_color_bold_cyan\t Enrypting RSA private key of SERVER with a pass phrase for security [${_my_cert_key}] $_reset_color"
+	if (( $_debug == 0 )) ; then
+		$_openssl rsa -des3 -in "$_my_cert_key" -out "$_my_cert_key".crypt > /dev/null 2>&1
+		if (( $? != 0 )) ; then
+			echo $_echo_flag "$_color_bold_red\t!!!! $_program Error: Failed to Enrypting RSA private key of CA with a pass phrase !!!!$_reset_color"
+			return 1
+		fi
 	fi
 	return 0
 }
@@ -245,15 +284,17 @@ function make_it() {
 	check_cert
 	(( $? != 0 )) && return 1
 
-	# create the password file for the cert, so we have it in case we forgot the password.
-	mv ${_my_cert_name}*  real_certs/
-	echo $_echo_flag "\t*** About to Create the password file for the CA cert, so we have it in case we forgot the password ***"
-	echo -n "Enter the same password one more time.."
-	stty -echo
-	read in_key
-	stty echo
-	echo "$in_key" >  real_certs/"$_my_cert_name".pass
-	echo "Server ${_my_cert_name}'s CERT created and ready for use....."
+	if (( $_debug == 0 )) ; then
+		# create the password file for the cert, so we have it in case we forgot the password.
+		mv ${_my_cert_name}* real_certs/
+		echo $_echo_flag "\n$_color_bold_cyan\t About to Create the password file for the CA cert, so we have it in case we forgot the password $_reset_color"
+		echo -n "Enter the same password one more time.."
+		stty -echo
+		read in_key
+		stty echo
+		echo "$in_key" > real_certs/"$_my_cert_pass"
+		echo $_echo_flag "\n\t$_color_bold_green ${_my_cert_name}'s CERT created and ready for use.....$_reset_color"
+	fi
 	return 0
 }
 
@@ -275,7 +316,7 @@ function main() {
 	(( $_need_lock == 1 )) && check_running
 
 	echo $_echo_flag "$_text_before_start"
-	echo $_echo_flag "Press Enter to continue or Control-C to cancel..."
+	echo $_echo_flag "$_color_bold_yellow\tPress Enter to continue or Control-C to cancel...$_reset_color"
 	read inKey
 	make_it
 	_result=$?
