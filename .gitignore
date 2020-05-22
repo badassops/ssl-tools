@@ -1,4 +1,5 @@
 check_cert_file
+color
 env.bao
 certs/*
 real_certs/*
