@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 1996 - 2012 Luc Suryo <luc@suryo.com>.
-# Copyright 2012 - 2015 (c) Badassops LLC / Luc Suryo
+# Copyright 2012 - 2020 (c) Badassops LLC / Luc Suryo
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -31,11 +31,11 @@
 #*
 #* Description	:	script to make a X500-SSL certificate request file
 #*
-#* Author	:	Luc Suryo <luc@Badassops LLC.com>
+#* Author	:	Luc Suryo <luc@badassops.com>
 #*
-#* Version	:	0.5
+#* Version	:	0.6
 #*
-#* Date		:	May 7, 2020
+#* Date		:	May 21, 2020
 #*
 #* History	:
 #* 		Date:				Author		Info:
@@ -44,7 +44,8 @@
 #*		Aug 10, 2012		LIS			Set Copyright to Badassops LLC
 #*		Nov 23, 2015		LIS			Adjusted license and variable for Poynt
 #*										and made script with the standard setup
-#*		May 7	2020		LIS			added color and better wildcard (*) support
+#*		May 7, 2020			LIS			added color and better wildcard (*) support
+#*		May 21, 2020		LIS			fixed several bug and addd SAN suport
 #*
 # get details:
 # openssl rsa -noout -text -in server.key
@@ -57,7 +58,7 @@ _program="${0##*/}"
 _author='Luc Suryo'
 _copyright="Copyright 2012 - $(date "+%Y") (c) Badassops LLC"
 _license='License BSD, http://www.freebsd.org/copyright/freebsd-license.html'
-_version='0.5'
+_version='0.6'
 _email='luc@badassops.com'
 _summary='script to make a X500-SSL certificate request file'
 _cancelled="OK : Process has been cancelled on your request."
@@ -88,55 +89,31 @@ _work_cert="$_work_dir/mkcert.cfg"
 _echo_flag='-e'
 _openssl=openssl
 _debug=0
+_san_cert=0
 
 # Cert Variables
 if [[ -f env ]] ; then
 	source ./env
-fi
-
-# need to capture now so we can use it for clean_up_upon_fail
-_given_cert_name="$1"
-if [[ "$_given_cert_name" == *"wildcard"* ]]; then
-	_my_base_cert_name="${_given_cert_name/wildcard\./}"
-	_my_cert_name="*.${_my_base_cert_name}"
-	_subject_alt_name="DNS:$_my_cert_name, DNS:$_my_base_cert_name"
-	_my_cert_crt=wildcard."$_my_base_cert_name".crt
-	_my_cert_key=wildcard."$_my_base_cert_name".key
-	_my_cert_csr=wildcard."$_my_base_cert_name".csr
-	_my_cert_pass=wildcard."$_my_base_cert_name".pass
-
-elif [[ "$_given_cert_name" == *'*.'* ]]; then
-	_my_base_cert_name="${_given_cert_name#\*\.}"
-	_my_cert_name="*.${_my_base_cert_name}"
-	_subject_alt_name="DNS:$_my_cert_name, DNS:$_my_base_cert_name"
-	_my_cert_crt=wildcard."$_my_base_cert_name".crt
-	_my_cert_key=wildcard."$_my_base_cert_name".key
-	_my_cert_csr=wildcard."$_my_base_cert_name".csr
-	_my_cert_pass=wildcard."$_my_base_cert_name".pass
-
 else
-	_my_base_cert_name="$_given_cert_name"
-	_my_cert_name="$_given_cert_name"
-	_subject_alt_name="DNS:$_my_cert_name"
-	_my_cert_crte="$_my_cert_name".crt
-	_my_cert_key="$_my_cert_name".key
-	_my_cert_csr="$_my_cert_name".csr
-	_my_cert_pass="$_my_cert_name".pass
+	echo $_echo_flag "\t$_color_bold_purple ** no env file found"
+	echo $_echo_flag "\tyou will need to enter the cert detail manually **$_reset_color"
 fi
-_certs_files="$_my_cert_crt $_my_cert_key $_my_cert_csr $_my_cert_pass ${_my_cert_key}.crypt"
-
-# Set interrupt handler
-trap inthandler 1 2 3 4 5 9 10 12 15 23 24 25
 
 function inthandler() {
+	echo $_echo_flag "\n$_color_bold_red\t!!! Something when wrong or Control-C was press, deleting all certs file for $_my_cert_name !!!$_reset_color"
 	clean_up_upon_fail
 	clean_up
 	echo $_echo_flag "$_cancelled"
 	exit 0
 }
 
+function clean_up() {
+	clean_up_upon_fail
+	rm -rf "$_work_dir" > /dev/null 2>&1
+	return 0
+}
+
 function clean_up_upon_fail() {
-	echo $_echo_flag "\n$_color_bold_red\t!!! Something when wrong or Control-C was press, deleting all certs file for $_my_cert_name !!!$_reset_color"
 	for _cert_file in $_cert_files
 	do
 		# interrupted before files were move under the certs directory
@@ -147,24 +124,30 @@ function clean_up_upon_fail() {
 	return 0
 }
 
+
+# Set interrupt handler
+trap inthandler 1 2 3 4 5 9 10 12 15 23 24 25
+
 function clean_up_cert() {
 	for _cert_file in $_cert_files
 	do
+		# interrupted before files were move under the certs directory
+		[[ -f "$_cert_file" ]] && rm -f "$_cert_file" > /dev/null 2>&1
+		# interrupted after files were move under the certs directory
 		[[ -f real_certs/"$_cert_file" ]] && rm -f real_certs/"$_cert_file" > /dev/null 2>&1
 	done
-	return 0
-}
-
-function clean_up() {
-	rm -f "$_lockfile" > /dev/null 2>&1
 	return 0
 }
 
 function help() {
 	trap 1 2 3 4 5 9 10 12 15 23 24 25
 	echo $_echo_flag "$_info"
-	echo $_echo_flag "Usage : $_program [-h] name-for-cert"
-	echo $_echo_flag "Example: $_program www.suryo.com"
+	echo $_echo_flag "Usage : $_program [-h][-s] cert-domain"
+	echo $_echo_flag "\n\tUse the keyword $_color_bold_red wildcard$_reset_color,$_color_bold_red star$_reset_color or$_color_bold_red *$_reset_color, for wildcard cert"
+	echo $_echo_flag "\texample: $_program wildcard.suryo.com"
+	echo $_echo_flag "\n\tuse -s for a SAN supporting cert, default is no SAN."
+	echo $_echo_flag "\tyou can add up too 3 {sub}domains"
+	echo $_echo_flag "\texample: $_program -s wildcard.suryo.com alpha.dev.suryo.com alpha.dev.suryo.io omega.dev.suryo.us"
 	clean_up
 	exit 0
 }
@@ -179,15 +162,62 @@ function isRoot() {
 
 function check_running() {
 	if [[ -f "$_lockfile" ]]; then
-		echo $_echo_flag "$_color_bold_red There is already a $_program running, execution has been terminated. $_reset_color"
-		echo $_echo_flag "$_color_bold_red If this is an error please remove the lock file: $_lockfile. $_reset_color"
-		exit 2
+		/bin/ps -p $(cat $_lockfile) > /dev/null 2>&1
+		if (( $? == 0 )) ; then
+			echo $_echo_flag "*** There is already a $_program running, execution has been terminated. ***"
+			echo $_echo_flag "*** If this is an error please remove the lock file: $_lockfile ***"
+			exit $_state_ok
+		else
+			echo $_echo_flag "*** Lock file found and deleted since there is no process with that pid ***"
+			rm -rf $_lockfile > /dev/null 2>&1
+		fi
 	fi
 	if ! mkdir -p "$_work_dir" > /dev/null 2>&1;then
-		echo $_echo_flag "$_color_bold_red $_state_unknown_msg: Unable to create file working directory $_work_dir! $_reset_color"
-		exit 2
+		echo $_echo_flag "*** $_state_critical_msg: Unable to create file working directory $_work_dir! ***"
+		exit $_state_unknown
 	fi
 	echo "$_opid" > "$_lockfile"
+	return 0
+}
+
+function get_given_options() {
+	local _option_san=0
+	local _has_error=0
+	case "$1" in
+		'-s'|'--san'|'-san')			_san_cert=1 ; shift ; let _option_san++ ;;
+		'-h'|'--help'|'-help')			help ; exit $_state_ok ;;
+		'-v'|'--version'|'-version')	echo $_echo_flag "$_version" ; exit $_state_ok ;;
+		'-c'|'-cleanup'|'-cleanup')		clean_up_cert ; exit $_state_ok ;;
+	esac
+	(( $_option_san > 1 )) && echo $_echo_flag "\n\t: -s can only be given once." && help
+	[[ -z $1 ]] && help
+	_given_cert_name="$1"
+	if [[ "$_given_cert_name" =~ ^(wildcard|star|\*).* ]] ; then
+		_my_base_cert_name="${_given_cert_name#*\.}"
+		_my_cert_name="*.${_my_base_cert_name}"
+		_subject_alt_name="DNS:$_my_cert_name"
+		_my_cert_crt=wildcard."$_my_base_cert_name".crt
+		_my_cert_key=wildcard."$_my_base_cert_name".key
+		_my_cert_csr=wildcard."$_my_base_cert_name".csr
+		_my_cert_pass=wildcard."$_my_base_cert_name".pass
+	else
+		_my_base_cert_name="$_given_cert_name"
+		_my_cert_name="$_given_cert_name"
+		_subject_alt_name="DNS:$_my_cert_name"
+		_my_cert_crte="$_my_cert_name".crt
+		_my_cert_key="$_my_cert_name".key
+		_my_cert_csr="$_my_cert_name".csr
+		_my_cert_pass="$_my_cert_name".pass
+	fi
+	_cert_files="$_my_cert_crt $_my_cert_key $_my_cert_csr $_my_cert_pass ${_my_cert_key}.crypt"
+	if (( $_option_san == 1 )) ; then
+		shift
+		_san_domains="$@"
+		for _san_domain in $_san_domains
+		do
+			_subject_alt_name="$_subject_alt_name, DNS:$_san_domain"
+		done
+	fi
 	return 0
 }
 
@@ -202,7 +232,7 @@ function create_key() {
 	if (( $_debug == 0 )) ; then
 		$_openssl genrsa -out "$_my_cert_key" $_my_sec_size > /dev/null 2>&1
 		(( $? != 0 )) && return 1
-	echo $_echo_flag "$_color_bold_cyan\t created$_reset_color\n"
+		echo $_echo_flag "$_color_bold_cyan\t created$_reset_color\n"
 	fi
 	return 0
 }
@@ -248,7 +278,6 @@ basicConstraints				= CA:FALSE
 keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
 subjectAltName					= $_subject_alt_name
 EOT
-
 # removed req_attributes
 # challengePassword				= "The password for the request file"
 # challengePassword_default		= $_my_req_pass
@@ -276,7 +305,7 @@ function check_cert() {
 	return 0
 }
 
-function make_it() {
+function create_it() {
 	create_key
 	(( $? != 0 )) && return 1
 	create_csr
@@ -287,7 +316,7 @@ function make_it() {
 	if (( $_debug == 0 )) ; then
 		# create the password file for the cert, so we have it in case we forgot the password.
 		mv ${_my_cert_name}* real_certs/
-		echo $_echo_flag "\n$_color_bold_cyan\t About to Create the password file for the CA cert, so we have it in case we forgot the password $_reset_color"
+		echo $_echo_flag "\n$_color_bold_cyan\t About to Create the password file for the csr and key, so we have it in case we forgot the password $_reset_color"
 		echo -n "Enter the same password one more time.."
 		stty -echo
 		read in_key
@@ -299,28 +328,20 @@ function make_it() {
 }
 
 function main() {
-	# secret flag :)
-	case $1
-	in
-		cleanup)	clean_up_cert $2 ; exit 0 ;;
-		-h|--help)	help ; exit 0 ;;
-	esac
-
-	[[ $# != 1 ]] && help
-	setup_env
 
 	if (( $_need_root == 1 )) ; then
 		 isRoot
 		(( $? != 0 )) && echo $_echo_flag "$_info" && exit 255
 	fi
 	(( $_need_lock == 1 )) && check_running
+	get_given_options $@
+	setup_env
 
 	echo $_echo_flag "$_text_before_start"
 	echo $_echo_flag "$_color_bold_yellow\tPress Enter to continue or Control-C to cancel...$_reset_color"
 	read inKey
-	make_it
+	create_it
 	_result=$?
-
 	(( $_result == 1 )) && clean_up_upon_fail
 	clean_up
 	trap 1 2 3 4 5 9 10 12 15 23 24 25

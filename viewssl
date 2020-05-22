@@ -39,7 +39,7 @@
 #* History	:
 #* 		Date:			Author:				Info:
 #*		Apr 23, 1993	LIS					First Release
-#*		May 17, 2012	LIS					License adjusted	
+#*		May 17, 2012	LIS					License adjusted
 #*											use functions and bash
 #*											behave depends on $0, otherwise
 #*											requires --type|-t
@@ -78,7 +78,7 @@ function help() {
 	if [[ "$_ssl_cmd" == "" ]] ; then
 		_extra_flag=" -t type "
 	fi
-	echo $_echo_flag "Usage : $_program [-h] ${_extra_flag}file ... file" 
+	echo $_echo_flag "Usage : $_program [-h] ${_extra_flag}file ... file"
 	echo $_echo_flag " Options:"
 	echo $_echo_flag "   -h                  # this help page."
 	if [[ "$_ssl_cmd" == "" ]] ; then
@@ -106,7 +106,6 @@ function view_given_certs() {
 		else
 			echo $_echo_flag "\n\t *** file $_cert is not a file ***"
 		fi
-		
 	done
 	return 0
 }
@@ -116,9 +115,9 @@ function get_given_options() {
 	while [[ -n "$1" ]]
 	do
 		case "$1" in
-			 '-t'|'--type')		_my_type="$2" ; shift ; let _option++ ;;
-			'-h'|'--help')		help 0 ;;
-			*)					_given_files="$_given_files $1" ;;
+			 '-t'|'--type'|'-type')		_my_type="$2" ; shift ; let _option++ ;;
+			'-h'|'--help')				help 0 ;;
+			*)							_given_files="$_given_files $1" ;;
 		esac
 		shift
 	done
@@ -150,7 +149,7 @@ function get_what_am_i() {
 function main() {
 	get_what_am_i
 	(( $# == 0 )) && help 255
-	(( $_hit== 0 )) && get_given_options $@ || _given_files=$*
+	(( $_hit == 0 )) && get_given_options $@ || _given_files=$*
 
 	view_given_certs
 
