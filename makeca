@@ -324,7 +324,7 @@ function check_cert() {
 	fi
 
 	echo $_echo_flag "$_color_bold_green\t*** Verify: matching certificate signature ***$_reset_color\n"
-	$_openssl verify -CAfile "$_my_ca_dir"/"$_my_cert_crt" "$_my_ca_dir"/"$_my_cert_crt" /dev/null 2>&1
+	$_openssl verify -CAfile "$_my_ca_dir"/"$_my_cert_crt" "$_my_ca_dir"/"$_my_cert_crt" > /dev/null 2>&1
 	if (( $? != 0 )) ; then
 		echo $_echo_flag "$_color_bold_red\tError: Failed to verify CA root $_reset_color\n"
 		return 1
