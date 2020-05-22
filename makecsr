@@ -108,7 +108,6 @@ function inthandler() {
 }
 
 function clean_up() {
-	clean_up_upon_fail
 	rm -rf "$_work_dir" > /dev/null 2>&1
 	return 0
 }
@@ -246,6 +245,7 @@ distinguished_name				= req_distinguished_name
 attributes						= req_attributes
 string_mask						= utf8only
 req_extensions					= v3_req
+utf8							= yes
 
 [ req_distinguished_name ]
 countryName						= "1. Country Name (2 letter code)"
@@ -278,9 +278,6 @@ basicConstraints				= CA:FALSE
 keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
 subjectAltName					= $_subject_alt_name
 EOT
-# removed req_attributes
-# challengePassword				= "The password for the request file"
-# challengePassword_default		= $_my_req_pass
 
 	if (( $_debug == 0 )) ; then
 		echo $_echo_flag "$_color_bold_cyan\t Password set is $_color_bold_purple$_my_req_pass $_reset_color\n"
@@ -317,7 +314,7 @@ function create_it() {
 		# create the password file for the cert, so we have it in case we forgot the password.
 		mv ${_my_cert_name}* real_certs/
 		echo $_echo_flag "\n$_color_bold_cyan\t About to Create the password file for the csr and key, so we have it in case we forgot the password $_reset_color"
-		echo -n "Enter the same password one more time.."
+		echo -en "\t${_color_bold_yellow} Enter the same password one more time :$_reset_color "
 		stty -echo
 		read in_key
 		stty echo
@@ -328,7 +325,7 @@ function create_it() {
 }
 
 function main() {
-
+	local _result=0
 	if (( $_need_root == 1 )) ; then
 		 isRoot
 		(( $? != 0 )) && echo $_echo_flag "$_info" && exit 255
