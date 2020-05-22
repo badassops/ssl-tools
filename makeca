@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 1996 - 2012 Luc Suryo <luc@suryo.com>.
-# Copyright 2012 - 2015 (c) Badassops LLC / Luc Suryo
+# Copyright 2012 - 2020 (c) Badassops LLC / Luc Suryo
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@
 #* Date		:	May 21, 2020
 #*
 #* History	:
-#* 		Date:				Author:		Info:D
+#* 		Date:				Author:		Info:
 #*		March 1, 1996		LIS			First Release
 #*		July 20, 2010		LIS			New license
 #*		Aug 10, 2012		LIS			Set Copyright to Badassops LLC
