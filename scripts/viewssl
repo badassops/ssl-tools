@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+#
+# Copyright (c) Badassops LLC / Luc Suryo
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#	* Redistributions of source code must retain the above copyright
+#	notice, this list of conditions and the following disclaimer.
+#	* Redistributions in binary form must reproduce the above copyright
+#	notice, this list of conditions and the following disclaimer in the
+#	documentation and/or other materials provided with the distribution.
+#	* Neither the name of the <organization> nor the
+#	names of its contributors may be used to endorse or promote products
+#	derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSEcw
+# ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#*
+#* File		:	viewssl
+#*
+#* Description	:	Script to view a SSL certificate / key / request
+#*
+#* Author	:	Luc Suryo <luc@badassops.com>
+#*
+#* Version	:	0.3
+#*
+#* Date		:	May 21, 2020
+#*
+#* History	:
+#* 		Date:			Author:				Info:
+#*		Apr 23, 1993	LIS					First Release
+#*		May 17, 2012	LIS					License adjusted
+#*											use functions and bash
+#*											behave depends on $0, otherwise
+#*											requires --type|-t
+#*		May 21, 2020	LIS					adding more info help and color
+#*
+
+_program="${0##*/}"
+_author='Luc Suryo'
+_copyright="Copyright 1993 - $(date "+%Y") (c) Badassops LLC"
+_license='License BSD, http://www.freebsd.org/copyright/freebsd-license.html'
+_version='0.3'
+_email='luc@badassops.com'
+_summary='Script to view a SSL -certificate, -key or -request'
+_cancelled="OK : Process has been cancelled on your request."
+_info="$_program $_version\n$_copyright\n$_license\n\nWritten by $_author <$_email>\n$_summary\n"
+
+# Working variables
+_ok=0
+_error=1
+_hit=0
+_echo_flag='-e'
+_my_type=
+_given_files=
+_ssl_cmd=
+
+# color :)
+_reset_color='\033[0m'				# Text Reset
+_color_bold_black='\033[1;30m'		# Black
+_color_bold_red='\033[1;31m'		# Red
+_color_bold_green='\033[1;32m'		# Green
+_color_bold_yellow='\033[1;33m'		# Yellow
+_color_bold_blue='\033[1;34m'		# Blue
+_color_bold_purple='\033[1;35m'		# Purple
+_color_bold_cyan='\033[1;36m'		# Cyan
+_color_bold_white='\033[1;37m'		# White
+
+# working variables
+_debug=0
+
+# Set interrupt handler
+trap inthandler 1 2 3 4 5 9 10 12 15 23 24 25
+
+function inthandler() {
+	echo $_echo_flag "$_cancelled"
+	exit $_ok
+}
+
+function help() {
+	trap 1 2 3 4 5 9 10 12 15 23 24 25
+	echo $_echo_flag "$_info"
+	if [[ "$_ssl_cmd" == "" ]] ; then
+		_extra_flag=" -t type "
+	fi
+	echo $_echo_flag "Usage : $_program [-h] ${_extra_flag}file ... file"
+	echo $_echo_flag " Options:"
+	echo $_echo_flag "  -h           # this help page."
+	if [[ "$_ssl_cmd" == "" ]] ; then
+		echo $_echo_flag "  --type type  # Type of ssl file to be checked."
+		echo $_echo_flag "\nNotes:"
+		echo $_echo_flag "\ttype = cert or crt for certificate"
+		echo $_echo_flag "\ttype = key, for certificate"
+		echo $_echo_flag "\ttype = request or csr for certificate"
+	fi
+	echo $_echo_flag "\nIf the script is reamed (see list below), then it will behave as follow:"
+	echo $_echo_flag "\t${_color_bold_cyan}view_cert$_reset_color    : only handles certificate files"
+	echo $_echo_flag "\t${_color_bold_cyan}view_key$_reset_color     : only handles key files"
+	echo $_echo_flag "\t${_color_bold_cyan}view_request$_reset_color : only handles request files"
+	exit $1
+}
+
+function view_given_certs() {
+	for _cert in $_given_files
+	do
+		if [[ -f $_cert ]] ; then
+			$_ssl_cmd $_cert
+			if (( $? != 0 )) ; then
+				echo $_echo_flag "\n\t *** file $_cert does not seems to be a valid ssl $_my_type file."
+				echo $_echo_flag "\n\t *** press enter to continue ***"
+			else
+				echo $_echo_flag "\n\t *** Viewed $_cert press enter to continue ***"
+			fi
+			read _inkey
+		else
+			echo $_echo_flag "\n\t *** file $_cert is not a file ***"
+		fi
+	done
+	return 0
+}
+
+function get_given_options() {
+	local _option=0
+	while [[ -n "$1" ]]
+	do
+		case "$1" in
+			 '-t'|'--type'|'-type')		_my_type="$2" ; shift ; let _option++ ;;
+			'-h'|'--help')				help 0 ;;
+			*)							_given_files="$_given_files $1" ;;
+		esac
+		shift
+	done
+
+	(( $_option != 1 )) && echo $_echo_flag "\n\t: Mandatory --type option omitted.\n" && help 255
+	(( $_option > 1 )) && echo $_echo_flag "\n\t: --type can only be given once.\n" && help 255
+	[[ "$_given_files" = "" ]] && echo $_echo_flag "\n\t: no file(s) was given.\n" && help 255
+
+	case "$_my_type"
+	in
+		'cert'|'crt')		_ssl_cmd='openssl x509 -noout -text -in' ;;
+		"key")				_ssl_cmd='openssl rsa -noout -text -in' ;;
+		'request'|'csr')	_ssl_cmd='openssl req -text -noout -verify -in' ;;
+		*)		echo $_echo_flag "\n\t: invalid type $_my_type" && help 255 ;;
+	esac
+	return 0
+}
+
+function get_what_am_i() {
+	case $_program
+	in
+		view_cert)		_ssl_cmd='openssl x509 -noout -text -in' ; _hit=1 ;;
+		view_key)		_ssl_cmd='openssl rsa -noout -text -in' ; _hit=1 ;;
+		view_request)	_ssl_cmd='openssl req -text -noout -verify -in' ; _hit=1 ;;
+	esac
+	return 0
+}
+
+function main() {
+	get_what_am_i
+	(( $# == 0 )) && help 255
+	(( $_hit == 0 )) && get_given_options $@ || _given_files=$*
+
+	view_given_certs
+
+	trap 1 2 3 4 5 9 10 12 15 23 24 25
+	exit $_ok
+}
+main "$@"

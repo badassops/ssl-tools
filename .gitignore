@@ -1,5 +1,3 @@
-check_cert_file
-color
 env
 env.bao
 ca/*

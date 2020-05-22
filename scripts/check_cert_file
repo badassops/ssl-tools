@@ -1,0 +1,10 @@
+#!/bin/bash
+
+_cert_md5=$(openssl x509 -noout -modulus -in ca/ca.crt 2>/dev/null  | openssl md5)
+_key_md5=$(openssl rsa -noout -modulus -in ca/ca.key 2>/dev/null  | openssl md5)
+_csr_md5=$(openssl req -noout -modulus -in ca/ca.csr 2>/dev/null  | openssl md5)
+
+echo "MD5 values must be the same:"
+echo "cert md5: $_cert_md5"
+echo "key md5: $_key_md5"
+echo "csr md5: $_csr_md5"
