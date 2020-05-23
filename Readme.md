@@ -26,7 +26,7 @@ _my_org="Momo LLC"
 _my_email="momo@momo.com"
 _my_valid_days=1830
 _my_sec_size=2048
-_my_req_pass='Cr@zYP@$$wod!'
+_my_key_pass='Cr@zYP@$$wod!'
 _my_domain="momo.com"
 
 ```

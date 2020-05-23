@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# Copyright 1996 - 2012 Luc Suryo <luc@suryo.com>.
+# Copyright 2012 - 2020 (c) Badassops LLC / Luc Suryo
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#	* Redistributions of source code must retain the above copyright
+#	notice, this list of conditions and the following disclaimer.
+#	* Redistributions in binary form must reproduce the above copyright
+#	notice, this list of conditions and the following disclaimer in the
+#	documentation and/or other materials provided with the distribution.
+#	* Neither the name of the <organization> nor the
+#	names of its contributors may be used to endorse or promote products
+#	derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSEcw
+# ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+function create_csr() {
+	echo $_echo_flag "\t$_color_bold_cyan Generating X.509 certificate request [${_my_cert_csr}]$_reset_color"
+cat > $_work_cert <<EOT
+[ req ]
+default_bits					= $_my_sec_size
+distinguished_name				= req_distinguished_name
+attributes						= req_attributes
+string_mask						= utf8only
+req_extensions					= v3_req
+utf8							= yes
+
+[ req_distinguished_name ]
+countryName						= "1. Country Name (2 letter code)"
+countryName_default				= $_my_country
+countryName_min					= 2
+countryName_max					= 2
+stateOrProvinceName				= "2. State or Province Name (full name)"
+stateOrProvinceName_default		= $_my_state
+localityName					= "3. Locality Name (eg, city)"
+localityName_default			= $_my_city
+0.organizationName				= "4. Organization Name (eg, company)"
+0.organizationName_default		= $_my_org
+organizationalUnitName			= "5. Organizational Unit Name (eg, section)"
+organizationalUnitName_default	=
+commonName						= "6. Common Name (eg, fqdn)"
+commonName_max					= 64
+commonName_default				= $_my_cert_name
+
+[ req_attributes ]
+challengePassword_min			= 4
+challengePassword_max			= 20
+unstructuredName				= "Organization Name"
+unstructuredName_default		= $_my_org
+
+[ v3_req ]
+basicConstraints				= CA:FALSE
+keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
+subjectAltName					= $_subject_alt_name
+EOT
+
+	$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_dir"/"$_my_cert_key" -out "$_my_cert_dir"/"$_my_cert_csr" -extensions v3_req
+	(( $? != 0 )) && return 1
+	rm -f $_work_cert
+	return 0
+}

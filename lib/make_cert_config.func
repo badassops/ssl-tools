@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+#
+# Copyright 1996 - 2012 Luc Suryo <luc@suryo.com>.
+# Copyright 2012 - 2020 (c) Badassops LLC / Luc Suryo
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#	* Redistributions of source code must retain the above copyright
+#	notice, this list of conditions and the following disclaimer.
+#	* Redistributions in binary form must reproduce the above copyright
+#	notice, this list of conditions and the following disclaimer in the
+#	documentation and/or other materials provided with the distribution.
+#	* Neither the name of the <organization> nor the
+#	names of its contributors may be used to endorse or promote products
+#	derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSEcw
+# ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+function create_cert_config() {
+	echo $_echo_flag "\t*** Generating the cert configuration file [$_my_cert_cnf] ***"
+cat > $_my_cert_cnf <<EOT
+CA_HOME			= .
+
+[ ca ]
+default_ca		= root_ca
+
+[ root_ca ]
+dir				= \$CA_HOME
+certs			= \$dir
+new_certs_dir	= \$dir/certs
+database		= \$dir/ca/ca.index
+serial			= \$dir/ca/ca.serial
+certificate		= \$dir/ca/ca.crt
+private_key		= \$dir/ca/ca.key
+
+default_days	= 1826 # Five years
+crl_dir			= \$dir/ca/ca.crl
+crlnumber		= \$dir/ca/ca.crlnum
+name_opt		= multiline, align
+cert_opt		= no_pubkey
+copy_extensions	= copy
+crl_extensions	= crl_ext
+default_crl_days= 180
+default_md		= sha256
+preserve		= no
+email_in_dn		= no
+policy			= policy
+unique_subject	= no
+
+[ policy ]
+countryName				= supplied
+stateOrProvinceName		= supplied
+localityName			= supplied
+organizationName		= supplied
+organizationalUnitName	= supplied
+commonName				= supplied
+
+[ req ]
+dir					= \$CA_HOME
+default_bits		= 4096
+default_keyfile		= \$dir/ca/ca.key
+encrypt_key			= yes
+default_md			= sha256
+string_mask			= utf8only
+utf8				= yes
+req_extensions		= root-ca_req_ext
+distinguished_name	= distinguished_name
+subjectAltName		= @subject_alt_name
+req_extensions		= v3_req
+
+[ root-ca_req_ext ]
+subjectKeyIdentifier	= hash
+subjectAltName			= @subject_alt_name
+
+[ distinguished_name ]
+countryName                     = "1. Country Name             (2 letter code)"
+countryName_default             = $_my_country
+countryName_min                 = 2
+countryName_max                 = 2
+stateOrProvinceName             = "2. State or Province Name   (full name)    "
+stateOrProvinceName_default     = $_my_state
+localityName                    = "3. Locality Name            (eg, city)     "
+localityName_default            = $_my_city
+0.organizationName              = "4. Organization Name        (eg, company)  "
+0.organizationName_default      = $_my_org
+organizationalUnitName          = "5. Organizational Unit Name (eg, section)  "
+organizationalUnitName_default  = $_my_ca
+commonName                      = "6. Common Name              (eg, CA name)  "
+commonName_max                  = 64
+commonName_default              = $_my_org Root Certification Authority
+
+[ root-ca_ext ]
+basicConstraints		= critical, CA:true
+keyUsage				= critical, keyCertSign, cRLSign
+subjectKeyIdentifier	= hash
+subjectAltName			= @subject_alt_name
+authorityKeyIdentifier	= keyid:always
+issuerAltName			= issuer:copy
+
+[ intermed-ca_ext ]
+basicConstraints		= critical, CA:true, pathlen:0
+keyUsage				= critical, keyCertSign, cRLSign
+subjectKeyIdentifier	= hash
+subjectAltName			= @subject_alt_name
+authorityKeyIdentifier	= keyid:always
+issuerAltName			= issuer:copy
+
+[ crl_ext ]
+authorityKeyIdentifier	= keyid:always
+issuerAltName			= issuer:copy
+
+[ subject_alt_name ]
+URI				= http://$_my_org/
+email			= $_my_email
+
+[ v3_req ]
+subjectKeyIdentifier	= hash
+authorityKeyIdentifier	= keyid,issuer
+basicConstraints		= CA:FALSE
+subjectAltName			= $_subject_alt_name
+EOT
+	return 0
+}

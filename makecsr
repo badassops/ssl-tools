@@ -35,7 +35,7 @@
 #*
 #* Version	:	0.6
 #*
-#* Date		:	May 21, 2020
+#* Date		:	May 23, 2020
 #*
 #* History	:
 #* 		Date:				Author		Info:
@@ -46,13 +46,8 @@
 #*										and made script with the standard setup
 #*		May 7, 2020			LIS			added color and better wildcard (*) support
 #*		May 21, 2020		LIS			fixed several bug and addd SAN suport
+#*		may 23, 2020		LIS			change to use libraries
 #*
-# get details:
-# openssl rsa -noout -text -in server.key
-# openssl req -noout -text -in server.csr
-#
-# Get unsecure PEM key
-# openssl rsa -in server.key -out server.key.unsecure
 
 _program="${0##*/}"
 _author='Luc Suryo'
@@ -65,39 +60,22 @@ _cancelled="OK : Process has been cancelled on your request."
 _info="$_program $_version\n$_copyright\n$_license\n\nWritten by $_author <$_email>\n$_summary\n"
 _text_before_start="This script will create your certificate request and certificate key files, this is for in live production!"
 
-# Whatever script needs to be run as root and exclusive lock
-_need_root=0
-_need_lock=1
-
-# color :)
-_reset_color='\033[0m'				# Text Reset
-_color_bold_black='\033[1;30m'		# Black
-_color_bold_red='\033[1;31m'		# Red
-_color_bold_green='\033[1;32m'		# Green
-_color_bold_yellow='\033[1;33m'		# Yellow
-_color_bold_blue='\033[1;34m'		# Blue
-_color_bold_purple='\033[1;35m'		# Purple
-_color_bold_cyan='\033[1;36m'		# Cyan
-_color_bold_white='\033[1;37m'		# White
+source lib/variables.var
+source lib/color.func
+source lib/cleanup.func
+source lib/check_is_root.func
+source lib/check_running.func
+source lib/make_env.func
+source lib/make_key.func
+source lib/make_csr.func
+source lib/check_csr.func
+source lib/create_it.func
+source lib/make_pass_file.func
+source lib/main.func
 
 # working variables
-_opid=$$
-_hostname="${HOSTNAME%%.*}"
-_work_dir=/var/tmp/"$_program"
-_lockfile="$_work_dir/$_program".LOCK
-_work_cert="$_work_dir/mkcert.cfg"
-_echo_flag='-e'
-_openssl=openssl
-_debug=0
 _san_cert=0
-
-# Cert Variables
-if [[ -f env ]] ; then
-	source ./env
-else
-	echo $_echo_flag "\t$_color_bold_purple ** no env file found"
-	echo $_echo_flag "\tyou will need to enter the cert detail manually **$_reset_color"
-fi
+_my_cert_dir="./real_certs"
 
 function inthandler() {
 	echo $_echo_flag "\n$_color_bold_red\t!!! Something when wrong or Control-C was press, deleting all certs file for $_my_cert_name !!!$_reset_color"
@@ -107,36 +85,8 @@ function inthandler() {
 	exit 0
 }
 
-function clean_up() {
-	rm -rf "$_work_dir" > /dev/null 2>&1
-	return 0
-}
-
-function clean_up_upon_fail() {
-	for _cert_file in $_cert_files
-	do
-		# interrupted before files were move under the certs directory
-		[[ -f "$_cert_file" ]] && rm -f "$_cert_file" > /dev/null 2>&1
-		# interrupted after files were move under the certs directory
-		[[ -f real_certs/"$_cert_file" ]] && rm -f real_certs/"$_cert_file" > /dev/null 2>&1
-	done
-	return 0
-}
-
-
 # Set interrupt handler
 trap inthandler 1 2 3 4 5 9 10 12 15 23 24 25
-
-function clean_up_cert() {
-	for _cert_file in $_cert_files
-	do
-		# interrupted before files were move under the certs directory
-		[[ -f "$_cert_file" ]] && rm -f "$_cert_file" > /dev/null 2>&1
-		# interrupted after files were move under the certs directory
-		[[ -f real_certs/"$_cert_file" ]] && rm -f real_certs/"$_cert_file" > /dev/null 2>&1
-	done
-	return 0
-}
 
 function help() {
 	trap 1 2 3 4 5 9 10 12 15 23 24 25
@@ -149,34 +99,6 @@ function help() {
 	echo $_echo_flag "\texample: $_program -s wildcard.suryo.com alpha.dev.suryo.com alpha.dev.suryo.io omega.dev.suryo.us"
 	clean_up
 	exit 0
-}
-
-function isRoot() {
-	if (($(id -u) != 0)) ; then
-		echo $_echo_flag "$_color_bold_red\n\t $_program: this script must be run as the user root $_reset_color\n" >&2
-		return 1
-	fi
-	return 0
-}
-
-function check_running() {
-	if [[ -f "$_lockfile" ]]; then
-		/bin/ps -p $(cat $_lockfile) > /dev/null 2>&1
-		if (( $? == 0 )) ; then
-			echo $_echo_flag "*** There is already a $_program running, execution has been terminated. ***"
-			echo $_echo_flag "*** If this is an error please remove the lock file: $_lockfile ***"
-			exit $_state_ok
-		else
-			echo $_echo_flag "*** Lock file found and deleted since there is no process with that pid ***"
-			rm -rf $_lockfile > /dev/null 2>&1
-		fi
-	fi
-	if ! mkdir -p "$_work_dir" > /dev/null 2>&1;then
-		echo $_echo_flag "*** $_state_critical_msg: Unable to create file working directory $_work_dir! ***"
-		exit $_state_unknown
-	fi
-	echo "$_opid" > "$_lockfile"
-	return 0
 }
 
 function get_given_options() {
@@ -203,7 +125,7 @@ function get_given_options() {
 		_my_base_cert_name="$_given_cert_name"
 		_my_cert_name="$_given_cert_name"
 		_subject_alt_name="DNS:$_my_cert_name"
-		_my_cert_crte="$_my_cert_name".crt
+		_my_cert_crt="$_my_cert_name".crt
 		_my_cert_key="$_my_cert_name".key
 		_my_cert_csr="$_my_cert_name".csr
 		_my_cert_pass="$_my_cert_name".pass
@@ -220,128 +142,4 @@ function get_given_options() {
 	return 0
 }
 
-function setup_env() {
-	# make sure environment exists
-	[[ ! -d real_certs ]] && mkdir -p real_certs
-	return 0
-}
-
-function create_key() {
-	echo $_echo_flag "$_color_bold_cyan\t Generating RSA private key for SERVER ($_my_sec_size bit) [${_my_cert_key}] $_reset_color"
-	if (( $_debug == 0 )) ; then
-		$_openssl genrsa -out "$_my_cert_key" $_my_sec_size > /dev/null 2>&1
-		(( $? != 0 )) && return 1
-		echo $_echo_flag "$_color_bold_cyan\t created$_reset_color\n"
-	fi
-	return 0
-}
-
-function create_csr() {
-	echo $_echo_flag "\t$_color_bold_cyan Generating X.509 certificate request for SERVER [${_my_cert_csr}]$_reset_color"
-cat > $_work_cert <<EOT
-[ req ]
-default_bits					= $_my_sec_size
-distinguished_name				= req_distinguished_name
-attributes						= req_attributes
-string_mask						= utf8only
-req_extensions					= v3_req
-utf8							= yes
-
-[ req_distinguished_name ]
-countryName						= "1. Country Name (2 letter code)"
-countryName_default				= $_my_country
-countryName_min					= 2
-countryName_max					= 2
-stateOrProvinceName				= "2. State or Province Name (full name)"
-stateOrProvinceName_default		= $_my_state
-localityName					= "3. Locality Name (eg, city)"
-localityName_default			= $_my_city
-0.organizationName				= "4. Organization Name (eg, company)"
-0.organizationName_default		= $_my_org
-organizationalUnitName			= "5. Organizational Unit Name (eg, section)"
-organizationalUnitName_default	=
-commonName						= "6. Common Name (eg, fqdn)"
-commonName_max					= 64
-commonName_default				= $_my_cert_name
-emailAddress					= "7. Email Address (eg, name@fqdn)"
-emailAddress_max				= 40
-emailAddress_default			= $_my_email
-
-[ req_attributes ]
-challengePassword_min			= 4
-challengePassword_max			= 20
-unstructuredName				= "Organization Name"
-unstructuredName_default		= $_my_org
-
-[ v3_req ]
-basicConstraints				= CA:FALSE
-keyUsage						= nonRepudiation, digitalSignature, keyEncipherment
-subjectAltName					= $_subject_alt_name
-EOT
-
-	if (( $_debug == 0 )) ; then
-		echo $_echo_flag "$_color_bold_cyan\t Password set is $_color_bold_purple$_my_req_pass $_reset_color\n"
-		$_openssl req -nodes -config $_work_cert -new -key "$_my_cert_key" -out "$_my_cert_csr" -extensions v3_req
-		(( $? != 0 )) && return 1
-	else
-		cat $_work_cert
-	fi
-	rm -f $_work_cert
-	return 0
-}
-
-function check_cert() {
-	echo $_echo_flag "$_color_bold_cyan\t Enrypting RSA private key of SERVER with a pass phrase for security [${_my_cert_key}] $_reset_color"
-	if (( $_debug == 0 )) ; then
-		$_openssl rsa -des3 -in "$_my_cert_key" -out "$_my_cert_key".crypt > /dev/null 2>&1
-		if (( $? != 0 )) ; then
-			echo $_echo_flag "$_color_bold_red\t!!!! $_program Error: Failed to Enrypting RSA private key of CA with a pass phrase !!!!$_reset_color"
-			return 1
-		fi
-	fi
-	return 0
-}
-
-function create_it() {
-	create_key
-	(( $? != 0 )) && return 1
-	create_csr
-	(( $? != 0 )) && return 1
-	check_cert
-	(( $? != 0 )) && return 1
-
-	if (( $_debug == 0 )) ; then
-		# create the password file for the cert, so we have it in case we forgot the password.
-		mv ${_my_cert_name}* real_certs/
-		echo $_echo_flag "\n$_color_bold_cyan\t About to Create the password file for the csr and key, so we have it in case we forgot the password $_reset_color"
-		echo -en "\t${_color_bold_yellow} Enter the same password one more time :$_reset_color "
-		stty -echo
-		read in_key
-		stty echo
-		echo "$in_key" > real_certs/"$_my_cert_pass"
-		echo $_echo_flag "\n\t$_color_bold_green ${_my_cert_name}'s CERT created and ready for use.....$_reset_color"
-	fi
-	return 0
-}
-
-function main() {
-	local _result=0
-	if (( $_need_root == 1 )) ; then
-		 isRoot
-		(( $? != 0 )) && echo $_echo_flag "$_info" && exit 255
-	fi
-	(( $_need_lock == 1 )) && check_running
-	get_given_options $@
-	setup_env
-
-	echo $_echo_flag "$_text_before_start"
-	echo $_echo_flag "$_color_bold_yellow\tPress Enter to continue or Control-C to cancel...$_reset_color"
-	read inKey
-	create_it
-	_result=$?
-	(( $_result == 1 )) && clean_up_upon_fail
-	clean_up
-	trap 1 2 3 4 5 9 10 12 15 23 24 25
-	exit $_result
-}
 main "$@"
