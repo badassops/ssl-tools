@@ -51,5 +51,6 @@ function create_it() {
 			rm -f $_my_cert_cnf
 			;;
 	esac
+	decrypt_key
 	create_pass_file
 }

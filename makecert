@@ -69,6 +69,7 @@ source lib/make_cert_config.func
 source lib/make_key.func
 source lib/make_csr.func
 source lib/check_cert.func
+source lib/decrypt_key.func
 source lib/create_it.func
 source lib/make_pass_file.func
 source lib/main.func

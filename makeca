@@ -68,6 +68,7 @@ source lib/make_env.func
 source lib/make_ca_config.func
 source lib/make_key.func
 source lib/check_ca.func
+source lib/decrypt_key.func
 source lib/create_it.func
 source lib/make_pass_file.func
 source lib/main.func
