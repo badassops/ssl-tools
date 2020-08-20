@@ -53,4 +53,5 @@ function create_it() {
 	esac
 	decrypt_key
 	create_pass_file
+	chmod 0400 "$_my_cert_dir"/*
 }

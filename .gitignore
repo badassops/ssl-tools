@@ -3,3 +3,4 @@ env.bao
 ca/*
 certs/*
 real_certs/*
+.DS_Store

@@ -109,38 +109,47 @@ function get_given_options() {
 	local _option_san=0
 	local _has_error=0
 	case "$1" in
-		'-s'|'--san'|'-san')			_san_cert=1 ; shift ; let _option_san++ ;;
+		'-s'|'--san'|'-san')			_san_cert=1 ; shift; let _option_san++ ;;
 		'-h'|'--help'|'-help')			help ; exit $_state_ok ;;
 		'-v'|'--version'|'-version')	echo $_echo_flag "$_version" ; exit $_state_ok ;;
 		'-c'|'-cleanup'|'-cleanup')		clean_up_cert ; exit $_state_ok ;;
 	esac
+	shift
 	(( $_option_san > 1 )) && echo $_echo_flag "\n\t: -s can only be given once." && help
 	[[ -z $1 ]] && help
+	_san_prefix=
+	(( $_option_san == 1 )) && _san_prefix="san-"
 	_given_cert_name="$1"
 	if [[ "$_given_cert_name" =~ ^(wildcard|star|\*).* ]] ; then
 		_my_base_cert_name="${_given_cert_name#*\.}"
 		_my_cert_name="*.${_my_base_cert_name}"
 		_subject_alt_name="DNS:$_my_cert_name"
-		_my_cert_crt=wildcard."$_my_base_cert_name".crt
-		_my_cert_key=wildcard."$_my_base_cert_name".key
-		_my_cert_csr=wildcard."$_my_base_cert_name".csr
-		_my_cert_pass=wildcard."$_my_base_cert_name".pass
+		_my_cert_crt=${_san_prefix}wildcard."$_my_base_cert_name".crt
+		_my_cert_key=${_san_prefix}wildcard."$_my_base_cert_name".key
+		_my_cert_csr=${_san_prefix}wildcard."$_my_base_cert_name".csr
+		_my_cert_pass=${_san_prefix}wildcard."$_my_base_cert_name".pass
 	else
 		_my_base_cert_name="$_given_cert_name"
 		_my_cert_name="$_given_cert_name"
 		_subject_alt_name="DNS:$_my_cert_name"
-		_my_cert_crt="$_my_cert_name".crt
-		_my_cert_key="$_my_cert_name".key
-		_my_cert_csr="$_my_cert_name".csr
-		_my_cert_pass="$_my_cert_name".pass
+		_my_cert_crt=${_san_prefix}"$_my_cert_name".crt
+		_my_cert_key=${_san_prefix}"$_my_cert_name".key
+		_my_cert_csr=${_san_prefix}"$_my_cert_name".csr
+		_my_cert_pass=${_san_prefix}"$_my_cert_name".pass
 	fi
 	_cert_files="$_my_cert_crt $_my_cert_key $_my_cert_csr $_my_cert_pass ${_my_cert_key}.crypt"
-	if (( $_option_san == 1 )) ; then
+
+	if (( $_san_cert == 1 )) ; then
 		shift
 		_san_domains="$@"
 		for _san_domain in $_san_domains
 		do
-			_subject_alt_name="$_subject_alt_name, DNS:$_san_domain"
+			_my_san_cert_name="$_san_domain"
+			if [[ "$_my_san_cert_name" =~ ^(wildcard|star|\*).* ]] ; then
+				_my_san_cert_base="${_my_san_cert_name#*\.}"
+				_my_san_cert_name="*.${_my_san_cert_base}"
+			fi
+			_subject_alt_name="$_subject_alt_name, DNS:$_my_san_cert_name"
 		done
 	fi
 	return 0
